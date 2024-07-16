@@ -1,18 +1,26 @@
 # use PHP 8.2
 FROM php:8.2-fpm
 
-# Install common php extension dependencies
+COPY composer.* /var/www/example-app/
+
+WORKDIR /var/www/example-app
 RUN apt-get update && apt-get install -y \
-    libfreetype-dev \
-    libjpeg62-turbo-dev \
-    libpng-dev \
-    zlib1g-dev \
-    libzip-dev \
-    unzip \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) gd \
-    && docker-php-ext-install zip
-    
+build-essential \
+libmcrypt-dev \
+mariadb-client \
+libpng-dev \
+libjpeg62-turbo-dev \
+libfreetype6-dev \
+locales \
+zip \
+jpegoptim optipng pngquant gifsicle \
+vim \
+unzip \
+git \
+curl \
+libzip-dev \
+zip
+
 # Install Microsoft ODBC Driver for SQL Server and the PHP extensions
 RUN apt-get update && apt-get install -y gnupg2 \
     && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
@@ -23,20 +31,22 @@ RUN apt-get update && apt-get install -y gnupg2 \
     && pecl install sqlsrv pdo_sqlsrv \
     && docker-php-ext-enable sqlsrv pdo_sqlsrv
 
-# Set the working directory
-COPY . /var/www/app
-WORKDIR /var/www/app
-
-RUN chown -R www-data:www-data /var/www/app \
-    && chmod -R 775 /var/www/app/storage
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN docker-php-ext-install pdo pdo_mysql gd zip
 
 
-# install composer
-COPY --from=composer:2.6.5 /usr/bin/composer /usr/local/bin/composer
+# Instal Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-# copy composer.json to workdir & install dependencies
-COPY composer.json ./
-RUN composer install
+# RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+RUN groupadd -g 1000 www
+RUN useradd -u 1000 -ms /bin/bash -g www www
+COPY . .
+COPY --chown=www:www . .
+USER www
 
-# Set the default command to run php-fpm
-CMD ["php-fpm"]
+# Jalankan composer install
+# RUN composer install --no-interaction --prefer-dist --optimize-autoloader --verbose || true
+
+EXPOSE 9000
+CMD [ "php-fpm" ]
